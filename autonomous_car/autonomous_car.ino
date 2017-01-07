@@ -2,9 +2,15 @@
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
+// Define constants for motors
+
+#define INIT_FRONT_SPEED 75
+#define INIT_BACK_SPEED 75
+#define INCREASE_FRONT_MOTOR 10
+
 Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
-Adafruit_DCMotor *myMotor1 = AFMS.getMotor(1);
-Adafruit_DCMotor *myMotor2 = AFMS.getMotor(3);
+Adafruit_DCMotor *frontMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *backMotor = AFMS.getMotor(3);
 
 int mOn = 8;
 int mOff = 9;
@@ -38,8 +44,8 @@ void setup() {
   Serial.begin(9600);
   AFMS.begin();  // create with the default frequency 1.6KHz
 
-  myMotor1->setSpeed(75);
-  myMotor2->setSpeed(75);
+  frontMotor->setSpeed(INIT_FRONT_SPEED);
+  backMotor->setSpeed(INIT_BACK_SPEED);
 
   pinMode(mOn, INPUT);
   pinMode(mOff, INPUT);
@@ -70,10 +76,10 @@ void loop() {
   
 
   if (bs1){
-    motorF();
+    motor_forward(backMotor);
   }
   else if (bs2){
-    motorOff();
+    motor_off(backMotor);
   }
 
   //delay(500);
@@ -101,17 +107,20 @@ void printDistance(int dist){
   }
 }
 
-void motorF(){
-  myMotor2->run(FORWARD);
-  Serial.println("case 1");
+/*
+ *  MOTOR CONTROL CODE 
+ */
+
+void motor_forward(Adafruit_DCMotor *inputMotor){
+  inputMotor->run(FORWARD);
   delay(10);
 } 
-void motorR(){
-  myMotor2->run(BACKWARD);
+void motor_reverse(Adafruit_DCMotor *inputMotor){
+  inputMotor->run(BACKWARD);
   delay(10);
 }
-void motorOff(){
-  myMotor2->run(RELEASE);
+void motor_off(Adafruit_DCMotor *inputMotor){
+  inputMotor->run(RELEASE);
   delay(10);
 }
 
