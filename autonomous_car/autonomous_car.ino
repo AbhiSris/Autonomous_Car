@@ -2,6 +2,8 @@
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 #include <Servo.h>
+#include <math.h>
+#include <Mag.h>
 
 // Define constants for motors
 #define INIT_FRONT_SPEED 75
@@ -38,6 +40,10 @@ int distanceC =0;
 
 int distVals[2] = {0,0};
 
+#define address 0x1E //0011110b, I2C 7bit address of HMC5883
+
+Magnometer mag;
+
 void setup() {
   Serial.begin(9600);
   AFMS.begin();  // create with the default frequency 1.6KHz
@@ -61,7 +67,8 @@ void setup() {
   }
   //motor_forward(backMotor);
   myservo.write(pos);
-  
+
+  mag.mag_setup();
 
 }
 
@@ -96,10 +103,13 @@ void loop() {
 //      Serial.println(pos);
       delay(15);
     }
+
+    mag.start_comm();
+    mag.mag_read_write();
 }
 
 /* 
- *  ULTRASONIC CONTROL CODE
+ * ULTRASONIC CONTROL CODE
  */
 int getDistance (int trigPin, int echoPin){
   digitalWrite(trigPin, HIGH);
@@ -133,7 +143,7 @@ void printDistance(int dist){
 }
 
 /*
- *  MOTOR CONTROL CODE 
+ * MOTOR CONTROL CODE 
  */
 void motor_forward(Adafruit_DCMotor *inputMotor){
   inputMotor->run(FORWARD);
@@ -147,6 +157,10 @@ void motor_off(Adafruit_DCMotor *inputMotor){
   inputMotor->run(RELEASE);
   delay(10);
 }
+
+/*
+ * GPS CONTROL CODE
+ */
 
 
 
