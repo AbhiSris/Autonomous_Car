@@ -58,6 +58,8 @@ int distVals[2] = {0, 0};
 
 Magnometer mag;
 
+int state = 0;
+
 void setup() {
   Serial.begin(9600);
   AFMS.begin();  // create with the default frequency 1.6KHz
@@ -99,11 +101,12 @@ void loop() {
 
   buttonState = digitalRead(stopButton);
 
-  Serial.println("no obstacle detected ");
+  
 
 //  getAccelReadings();
 
-  getAllDistances();
+    Serial.println(state);
+    getAllDistances();
 
   if (stopButton == HIGH) {
     frontMotor->run(RELEASE);
@@ -113,10 +116,11 @@ void loop() {
 
   // State 1: both sensors see something, turn right for now
   if (distVals[0] < OBSTACLE_DIST && distVals[1] < OBSTACLE_DIST && !leftFlag && !rightFlag) {
-    Serial.println("State 1");
+    state = 1;
+    Serial.println(state);
     getAccelReadings();
     startBearing = mag.getAngle();
-    frontMotor->run(FORWARD);
+    frontMotor->run(RELEASE);
     turningFlag = true;
     rightFlag = true;
     obstacleFlag = true;
@@ -124,7 +128,8 @@ void loop() {
 
   // State 2: left sensor sees something, turn right
   else if (distVals[0] < OBSTACLE_DIST  && !leftFlag && !rightFlag) {
-    Serial.println("State 2");
+    state = 2;
+    Serial.println(state);
     getAccelReadings();
     startBearing = mag.getAngle();
     frontMotor->run(FORWARD);
@@ -135,7 +140,8 @@ void loop() {
 
   // State 3: right sensor sees something, turn left
   else if (distVals[1] < OBSTACLE_DIST  && !leftFlag && !rightFlag) {
-    Serial.println("State 3");
+    state = 3;
+    Serial.println(state);
     getAccelReadings();
     startBearing = mag.getAngle();
     frontMotor->run(BACKWARD);
