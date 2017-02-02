@@ -35,12 +35,9 @@ int currBearing;
 
 int pos = SERVO_INIT;
 
-int mOn = 8;
-int mOff = 12;
+int stopButton = 6;
 
-int start_button = 0;
-int left_button = 0;
-int right_button = 0;
+int buttonState = 0;
 
 //Sonar 1
 int echoPinL = 2;
@@ -63,14 +60,12 @@ Magnometer mag;
 
 void setup() {
   Serial.begin(9600);
-//  AFMS.begin();  // create with the default frequency 1.6KHz
+  AFMS.begin();  // create with the default frequency 1.6KHz
 
   pinMode(trigPinL, OUTPUT);
   pinMode(echoPinL, INPUT);
   pinMode(trigPinR, OUTPUT);
   pinMode(echoPinR, INPUT);
-  pinMode(mOn, INPUT);
-  pinMode(mOff, INPUT);
 
   frontMotor->setSpeed(INIT_FRONT_SPEED);
   backMotor->setSpeed(INIT_BACK_SPEED);
@@ -89,6 +84,8 @@ void setup() {
 
 //  backMotor->run(FORWARD);
 
+  pinMode(stopButton, INPUT);
+
 }
 
 /*
@@ -100,11 +97,18 @@ void loop() {
      LOGIC FOR AUTONOMOUS
   */
 
+  buttonState = digitalRead(stopButton);
+
   Serial.println("no obstacle detected ");
 
 //  getAccelReadings();
 
   getAllDistances();
+
+  if (stopButton == HIGH) {
+    frontMotor->run(RELEASE);
+    backMotor->run(RELEASE);
+  }
   
 
   // State 1: both sensors see something, turn right for now
@@ -119,7 +123,7 @@ void loop() {
   }
 
   // State 2: left sensor sees something, turn right
-  else if (distVals[0] < OBSTACLE_DIST && !leftFlag && !rightFlag) {
+  else if (distVals[0] < OBSTACLE_DIST  && !leftFlag && !rightFlag) {
     Serial.println("State 2");
     getAccelReadings();
     startBearing = mag.getAngle();
@@ -130,7 +134,7 @@ void loop() {
   }
 
   // State 3: right sensor sees something, turn left
-  else if (distVals[1] < OBSTACLE_DIST && !leftFlag && !rightFlag) {
+  else if (distVals[1] < OBSTACLE_DIST  && !leftFlag && !rightFlag) {
     Serial.println("State 3");
     getAccelReadings();
     startBearing = mag.getAngle();
@@ -236,7 +240,6 @@ int getDistance (int trigPin, int echoPin) {
 
 void getAllDistances () {
   distVals[0] = getDistance(trigPinL, echoPinL);
-  delay(150);
   distVals[1] = getDistance(trigPinR, echoPinR);
 
   Serial.print("L: ");
@@ -244,6 +247,7 @@ void getAllDistances () {
   Serial.print("R: ");
   printDistance(distVals[1]);
   Serial.println(" ");
+  delay(150);
 }
 
 void printDistance(int dist) {
