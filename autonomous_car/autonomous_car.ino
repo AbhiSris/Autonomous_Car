@@ -15,6 +15,7 @@
 #define SERVO_INIT 75
 #define OBSTACLE_DIST 25
 #define TURNING_ANGLE 45
+#define ACCEL_TUNING 5
 
 // Motor definitions
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
@@ -33,6 +34,7 @@ bool leftFlag = false;
 bool rightFlag = false;
 volatile int startBearing;
 volatile int currBearing;
+volatile int tuning_num = 0;
 
 int pos = SERVO_INIT;
 
@@ -148,11 +150,6 @@ void loop() {
     backMotor->run(RELEASE);
     getAccelReadings();
     startBearing = mag.getAngle();
-
-    if (startBearing < 45) {
-      startBearing = startBearing + 45;
-    }
-    
     frontMotor->run(BACKWARD);
     turningFlag = true;
     leftFlag = true;
@@ -163,7 +160,12 @@ void loop() {
   if (turningFlag && obstacleFlag) {
     state = 4;
     Serial.println(state);
-    getAccelReadings();
+    while (tuning_num < ACCEL_TUNING) {
+      getAccelReadings();
+      startBearing = mag.getAngle();
+      tuning_num = tuning_num + 1;
+    }
+    tuning_num = 0;
     backMotor->setSpeed(TURN_SPEED);
     backMotor->run(FORWARD);
     currBearing = mag.getAngle();
@@ -253,6 +255,12 @@ void loop() {
   if (turningFlag && !obstacleFlag) {
     state = 9;
     Serial.println(state);
+    while (tuning_num < ACCEL_TUNING) {
+      getAccelReadings();
+      startBearing = mag.getAngle();
+      tuning_num = tuning_num + 1;
+    }
+    tuning_num = 0;
     backMotor->setSpeed(TURN_SPEED);
     backMotor->run(FORWARD);
     getAccelReadings();
