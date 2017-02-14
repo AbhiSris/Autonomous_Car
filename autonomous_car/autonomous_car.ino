@@ -6,13 +6,14 @@
 #include <Mag.h>
 
 // Define constants for motors
-#define INIT_FRONT_SPEED 150
-#define INIT_BACK_SPEED 30
+#define INIT_FRONT_SPEED 240
+#define INIT_BACK_SPEED 40
+#define TURN_SPEED 70
 #define INCREASE_FRONT_MOTOR 10
 #define US_UPPER_LIMIT 200
 #define US_LOWER_LIMIT 0
 #define SERVO_INIT 75
-#define OBSTACLE_DIST 20
+#define OBSTACLE_DIST 25
 #define TURNING_ANGLE 45
 
 // Motor definitions
@@ -74,17 +75,17 @@ void setup() {
 
   myservo.attach(9);
 
-//  // Loop won't start without clicking the start button
-//  start_button = digitalRead(mOn);
-//  while (!start_button) {
-//    start_button = digitalRead(mOn);
-//  }
+  //  // Loop won't start without clicking the start button
+  //  start_button = digitalRead(mOn);
+  //  while (!start_button) {
+  //    start_button = digitalRead(mOn);
+  //  }
   //motor_forward(backMotor);
   myservo.write(pos);
 
   mag.mag_setup();
 
-  backMotor->run(FORWARD);
+//  backMotor->run(FORWARD);
 
   pinMode(stopButton, INPUT);
 
@@ -101,26 +102,27 @@ void loop() {
 
   buttonState = digitalRead(stopButton);
 
-  
+
 
   getAccelReadings();
 
-    Serial.println(state);
-    getAllDistances();
+  Serial.println(state);
+  getAllDistances();
 
   if (stopButton == HIGH) {
     frontMotor->run(RELEASE);
     backMotor->run(RELEASE);
   }
-  
+
 
   // State 1: both sensors see something, turn right for now
   if (distVals[0] < OBSTACLE_DIST && distVals[1] < OBSTACLE_DIST && !leftFlag && !rightFlag && !turningFlag) {
     state = 1;
     Serial.println(state);
+    backMotor->run(RELEASE);
     getAccelReadings();
     startBearing = mag.getAngle();
-    frontMotor->run(RELEASE);
+    frontMotor->run(FORWARD);
     turningFlag = true;
     rightFlag = true;
     obstacleFlag = true;
@@ -130,9 +132,10 @@ void loop() {
   else if (distVals[0] < OBSTACLE_DIST  && !leftFlag && !rightFlag && !turningFlag) {
     state = 2;
     Serial.println(state);
+    backMotor->run(RELEASE);
     getAccelReadings();
     startBearing = mag.getAngle();
-    frontMotor->run(FORWARD);
+    frontMotor->run(BACKWARD);
     turningFlag = true;
     rightFlag = true;
     obstacleFlag = true;
@@ -142,8 +145,14 @@ void loop() {
   else if (distVals[1] < OBSTACLE_DIST  && !leftFlag && !rightFlag && !turningFlag) {
     state = 3;
     Serial.println(state);
+    backMotor->run(RELEASE);
     getAccelReadings();
     startBearing = mag.getAngle();
+
+    if (startBearing < 45) {
+      startBearing = startBearing + 45;
+    }
+    
     frontMotor->run(BACKWARD);
     turningFlag = true;
     leftFlag = true;
@@ -155,6 +164,8 @@ void loop() {
     state = 4;
     Serial.println(state);
     getAccelReadings();
+    backMotor->setSpeed(TURN_SPEED);
+    backMotor->run(FORWARD);
     currBearing = mag.getAngle();
     while ( abs(startBearing - currBearing) < TURNING_ANGLE) {
       getAccelReadings();
@@ -165,6 +176,8 @@ void loop() {
       Serial.print("curr: ");
       Serial.println(currBearing);
     }
+    backMotor->run(RELEASE);
+    backMotor->setSpeed(INIT_BACK_SPEED);
     frontMotor->run(RELEASE);
     turningFlag = false;
     turningStepperFlag = true;
@@ -204,6 +217,7 @@ void loop() {
         Serial.println(currBearing);
       }
     }
+    backMotor->run(FORWARD);
     turningStepperFlag == false;
   }
 
@@ -211,6 +225,7 @@ void loop() {
   if (distVals[0] > OBSTACLE_DIST && distVals[1] > OBSTACLE_DIST && leftFlag && !turningFlag && obstacleFlag) {
     state = 7;
     Serial.println(state);
+    backMotor->run(RELEASE);
     getAccelReadings();
     startBearing = mag.getAngle();
     frontMotor->run(FORWARD);
@@ -224,6 +239,7 @@ void loop() {
   if (distVals[0] > OBSTACLE_DIST && distVals[1] > OBSTACLE_DIST && rightFlag && !turningFlag && obstacleFlag) {
     state = 8;
     Serial.println(state);
+    backMotor->run(RELEASE);
     getAccelReadings();
     startBearing = mag.getAngle();
     frontMotor->run(BACKWARD);
@@ -237,6 +253,8 @@ void loop() {
   if (turningFlag && !obstacleFlag) {
     state = 9;
     Serial.println(state);
+    backMotor->setSpeed(TURN_SPEED);
+    backMotor->run(FORWARD);
     getAccelReadings();
     currBearing = mag.getAngle();
     while ( abs(startBearing - currBearing) < TURNING_ANGLE) {
@@ -248,7 +266,9 @@ void loop() {
       Serial.print("curr: ");
       Serial.println(currBearing);
     }
+    backMotor->run(RELEASE);
     frontMotor->run(RELEASE);
+    backMotor->setSpeed(INIT_BACK_SPEED);
     turningFlag = false;
     turningStepperFlag = true;
     leftFlag = false;
@@ -282,13 +302,13 @@ void getAllDistances () {
 }
 
 void printDistance(int dist) {
-//  if (dist >= US_UPPER_LIMIT || dist <= US_LOWER_LIMIT ) {
-//    Serial.println(" Out of range");
-//  }
-//  else {
-    Serial.print(dist);
-    Serial.println(" cm");
-//  }
+  //  if (dist >= US_UPPER_LIMIT || dist <= US_LOWER_LIMIT ) {
+  //    Serial.println(" Out of range");
+  //  }
+  //  else {
+  Serial.print(dist);
+  Serial.println(" cm");
+  //  }
 }
 
 /*
@@ -314,11 +334,32 @@ void motor_off(Adafruit_DCMotor *inputMotor) {
 void getAccelReadings() {
   mag.start_comm();
   mag.mag_read_write();
-
-
-  Serial.print("Angle is ");
   mag.setAngle(gp);
+
+  if (mag.getCount() > 5) {
+
+    if ((mag.getPrevAngle() - mag.getAngle()) > 250) {
+      mag.incrementTurns();
+    }
+    else if ((mag.getAngle()) - mag.getPrevAngle() > 250) {
+      mag.decrementTurns();
+    }
+    else {
+      mag.setPrevAngle(mag.getAngle());
+    }
+
+    mag.setCount();
+  }
+  
+  mag.incrementCount();
+
+
+
+  Serial.print("Prev Angle is ");
+  Serial.print(mag.getPrevAngle());
+  Serial.print("  Curr Angle is ");
   Serial.println(mag.getAngle());
+  
 }
 
 
