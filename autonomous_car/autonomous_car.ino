@@ -1,3 +1,4 @@
+#include <PID_v1.h>
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
@@ -8,11 +9,11 @@
 // Define constants for motors
 #define INIT_FRONT_SPEED 240
 #define INIT_BACK_SPEED 40
-#define TURN_SPEED 70
+#define TURN_SPEED 50
 #define INCREASE_FRONT_MOTOR 10
 #define US_UPPER_LIMIT 200
 #define US_LOWER_LIMIT 0
-#define SERVO_INIT 75
+#define SERVO_INIT 70
 #define OBSTACLE_DIST 25
 #define TURNING_ANGLE 45
 #define ACCEL_TUNING 5
@@ -29,6 +30,7 @@ Servo myservo;
 
 bool turningFlag = false;
 bool turningStepperFlag = false;
+bool turningStepperOrigFlag = false;
 bool obstacleFlag = false;
 bool leftFlag = false;
 bool rightFlag = false;
@@ -62,6 +64,7 @@ int distVals[2] = {0, 0};
 Magnometer mag;
 
 int state = 0;
+
 
 void setup() {
   Serial.begin(9600);
@@ -186,10 +189,10 @@ void loop() {
   }
 
   // State 5: Turn stepper to face the obstacle
-  if (turningStepperFlag) {
+  if (turningStepperFlag && !turningStepperOrigFlag) {
     state = 5;
     Serial.println(state);
-    if (startBearing > currBearing) {
+    if (startBearing > currBearing && turningStepperFlag) {
       while (startBearing > currBearing) {
         pos += 1;
         myservo.write(pos);
@@ -203,8 +206,9 @@ void loop() {
         Serial.print("curr: ");
         Serial.println(currBearing);
       }
+      turningStepperFlag == false;
     }
-    else {
+    else if (startBearing < currBearing && turningStepperFlag){
       while (startBearing < currBearing) {
         pos -= 1;
         myservo.write(pos);
@@ -218,9 +222,9 @@ void loop() {
         Serial.print("curr: ");
         Serial.println(currBearing);
       }
+      turningStepperFlag == false;
     }
     backMotor->run(FORWARD);
-    turningStepperFlag == false;
   }
 
   // State 7: both sensors see something, turn right for now
@@ -229,12 +233,13 @@ void loop() {
     Serial.println(state);
     backMotor->run(RELEASE);
     getAccelReadings();
-    startBearing = mag.getAngle();
-    frontMotor->run(FORWARD);
-    turningFlag = true;
+    currBearing = mag.getAngle();
+//    frontMotor->run(FORWARD);
+//    turningFlag = true;
     leftFlag = false;
     rightFlag = true;
-    obstacleFlag = false;
+    turningStepperFlag = true;
+    turningStepperOrigFlag = true;
   }
 
   // State 8: both sensors see something, turn right for now
@@ -243,45 +248,126 @@ void loop() {
     Serial.println(state);
     backMotor->run(RELEASE);
     getAccelReadings();
-    startBearing = mag.getAngle();
-    frontMotor->run(BACKWARD);
-    turningFlag = true;
-    rightFlag = false;
+    currBearing = mag.getAngle();
+//    frontMotor->run(BACKWARD);
+//    turningFlag = true;
     leftFlag = true;
-    obstacleFlag = false;
+    rightFlag = false;
+    turningStepperFlag = true;
+    turningStepperOrigFlag = true;
+  }
+
+  if (turningStepperFlag && turningStepperOrigFlag) {
+    state = 10;
+    Serial.println(state);
+//    if (pos < SERVO_INIT && turningStepperOrigFlag) {
+//      while (pos < SERVO_INIT) {
+//        
+//        pos += 1;
+//        myservo.write(pos);
+//        Serial.println(pos);
+//        delay(15);
+//        getAccelReadings();
+//        Serial.println("");
+//        currBearing = mag.getAngle();
+//        Serial.print("start: ");
+//        Serial.print(startBearing);
+//        Serial.print("curr: ");
+//        Serial.println(currBearing);
+//      }
+//      turningStepperFlag == false;
+//      turningStepperOrigFlag == false;
+//    }
+//    else if (pos > SERVO_INIT && turningStepperOrigFlag){
+//      while (pos > SERVO_INIT) {
+//        pos -= 1;
+//        myservo.write(pos);
+//        Serial.println(pos);
+//        delay(15);
+//        getAccelReadings();
+//        Serial.println("");
+//        currBearing = mag.getAngle();
+//        Serial.print("start: ");
+//        Serial.print(startBearing);
+//        Serial.print("curr: ");
+//        Serial.println(currBearing);
+//      }
+
+      if ((abs(pos - SERVO_INIT) > 20) && turningStepperOrigFlag){
+        pos = SERVO_INIT;
+        myservo.write(pos);
+        delay(500);
+      }
+        
+      turningStepperFlag == false;
+      turningStepperOrigFlag == false;
+      turningFlag = true;
+      obstacleFlag = false;
   }
 
   // State 9: while turning, stop at 45 deg
   if (turningFlag && !obstacleFlag) {
     state = 9;
     Serial.println(state);
-    while (tuning_num < ACCEL_TUNING) {
-      getAccelReadings();
-      startBearing = mag.getAngle();
-      tuning_num = tuning_num + 1;
-    }
+//    while (tuning_num < ACCEL_TUNING) {
+//      getAccelReadings();
+//      startBearing = mag.getAngle();
+//      tuning_num = tuning_num + 1;
+//    }
     tuning_num = 0;
+    if (leftFlag) {
+      frontMotor->run(FORWARD);
+    }
+    else if (rightFlag) {
+      frontMotor->run(BACKWARD);
+    }
     backMotor->setSpeed(TURN_SPEED);
     backMotor->run(FORWARD);
     getAccelReadings();
     currBearing = mag.getAngle();
-    while ( abs(startBearing - currBearing) < TURNING_ANGLE) {
-      getAccelReadings();
-      Serial.println("");
-      currBearing = mag.getAngle();
-      Serial.print("start: ");
-      Serial.print(startBearing);
-      Serial.print("curr: ");
-      Serial.println(currBearing);
+
+    if (startBearing - currBearing > 0 && turningFlag) {
+      while (startBearing - currBearing > 0) {
+        getAccelReadings();
+        Serial.println("");
+        currBearing = mag.getAngle();
+        Serial.print("start: ");
+        Serial.print(startBearing);
+        Serial.print("curr: ");
+        Serial.println(currBearing);
+      }
+      turningFlag = false;
     }
+    else if (startBearing - currBearing < 0 && turningFlag) {
+      while (startBearing - currBearing < 0) {
+        getAccelReadings();
+        Serial.println("");
+        currBearing = mag.getAngle();
+        Serial.print("start: ");
+        Serial.print(startBearing);
+        Serial.print("curr: ");
+        Serial.println(currBearing);
+      }
+      turningFlag = false;
+    }
+    
+//    while ( abs(startBearing - currBearing) > 1) {
+//      getAccelReadings();
+//      Serial.println("");
+//      currBearing = mag.getAngle();
+//      Serial.print("start: ");
+//      Serial.print(startBearing);
+//      Serial.print("curr: ");
+//      Serial.println(currBearing);
+//    }
     backMotor->run(RELEASE);
     frontMotor->run(RELEASE);
     backMotor->setSpeed(INIT_BACK_SPEED);
-    turningFlag = false;
-    turningStepperFlag = true;
     leftFlag = false;
     rightFlag = false;
   }
+
+  
 
 }
 
