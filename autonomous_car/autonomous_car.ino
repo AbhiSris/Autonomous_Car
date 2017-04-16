@@ -1,4 +1,6 @@
 #include <PID_v1.h>
+
+#include <PID_v1.h>
 #include <Wire.h>
 #include <Adafruit_MotorShield.h>
 #include <math.h>
@@ -31,6 +33,16 @@ Adafruit_DCMotor *backMotor = AFMS.getMotor(3);
 ServoTimer2 servoRoll;
 
 /*
+ * OVERALL CODE
+ */
+
+enum enumStates {
+  directionFinding,
+  obstacleManeuver
+};
+ 
+
+/*
    CODE FOR AUTONOMOUS
 */
 
@@ -44,6 +56,24 @@ bool rightFlag = false;
 volatile int startBearing;
 volatile int currBearing;
 volatile int tuning_num = 0;
+
+// POSITION STUFF
+float initLat = 0;
+float initLong = 0;
+float currLat = 0;
+float currLong = 0;
+float initAngle = 0;
+float initPathAngle = 0;
+float pathDistance = 0;
+int pathTurningAngle = 0
+
+float targetLat = 4000;
+float targetLong = 7000;
+
+PID myPID(&pathAngle, &pathTurningAngle, &initPathAngle, 2, 2, 2, DIRECT);
+
+
+enumStates codeState = obstacleManeuver;
 
 int pos = SERVO_INIT;
 
@@ -126,6 +156,8 @@ void setup() {
   pinMode(stopButton, INPUT);
   maneuverFlag = false;
 
+
+
 }
 
 /*
@@ -133,30 +165,42 @@ void setup() {
 */
 
 void loop() { 
+  nsigned long currentMillis = millis();
+  getInitPathAngle();
 
-  getAccelReadings();
-  state = 0;
-  Serial.println(state);
-
-  unsigned long currentMillis = millis(); //currentMillis is the time that the arduino has been running in milliseconds
-
-  if(currentMillis - previousMillis>interval){  //should be a 3 second delay without the delay function
-    previousMillis = currentMillis; 
-    getAllDistances(); //run the ping sensor 
-    } 
-  else {
-      readGPS(); 
+  if (codeState == directionFinding) {
+    if (currentMillis % 5000 == 0) {
+      getPathAngle();
+      myPID.Compute();
     }
+  }
 
-  if (distVals[0] < OBSTACLE_DIST || distVals[1] < OBSTACLE_DIST) {
-    maneuverFlag = true;
+  
+  if (codeState == obstacleManeuver) {
+    getAccelReadings();
+    state = 0;
+    Serial.println(state);
+  
+    if(currentMillis - previousMillis>interval){  //should be a 3 second delay without the delay function
+      previousMillis = currentMillis; 
+      getAllDistances(); //run the ping sensor 
+      } 
+    else {
+        readGPS(); 
+      }
+  
+    if (distVals[0] < OBSTACLE_DIST || distVals[1] < OBSTACLE_DIST) {
+      maneuverFlag = true;
+    }
+    if (GPS.fix) {
+      Serial.println("");
+      Serial.println(GPS.latitude, 4); 
+      Serial.println(GPS.longitude, 4); 
+      Serial.println("");
+    }
   }
-  if (GPS.fix) {
-    Serial.println("");
-    Serial.println(GPS.latitude, 4); 
-    Serial.println(GPS.longitude, 4); 
-    Serial.println("");
-  }
+
+  
 
 //  while (maneuverFlag) {
 //    maneuverCode();
@@ -166,22 +210,24 @@ void loop() {
  * DIRECTION CODE
  */
 
-void initDirection() {
+void getInitPathAngle() {
   readGPS(); 
-  firstLat = GPS.latitude;
-  firstLong = GPS.longitude;
+  initLat = GPS.latitude;
+  initLong = GPS.longitude;
 
-  volatile unsigned long prevDirTimer = millis();
-  volatile unsigned long currDirTimer = millis();
-  while (currDirTimer - prevDirTimer < 3000) {
-    currDirTimer = millis();
-  }
+  initPathAngle = atan2((targetLat-initLat),(targetLong-initLong));
+}
 
-  readGPS();
-  secondLat = GPS.latitude;
-  secondLong = GPS.longitude;
+void getPathAngle() {
+  readGPS(); 
+  currLat = GPS.latitude;
+  currLong = GPS.longitude;
 
-  
+  pathAngle = atan2((targetLat-currLat),(targetLong-currLong));
+}
+
+void getPathDistance() {
+  pathDistance = sqrt(sq(targetLat-currLat) + sq(targetLong-currLong));
 }
 
 /*
