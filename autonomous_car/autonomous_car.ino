@@ -36,7 +36,9 @@ ServoTimer2 servoRoll;
  * OVERALL CODE
  */
 
-enum enumStates {
+enum controllerStates {
+  latSetting,
+  longSetting,
   directionFinding,
   obstacleManeuver
 };
@@ -63,17 +65,23 @@ float initLong = 0;
 float currLat = 0;
 float currLong = 0;
 float initAngle = 0;
-float initPathAngle = 0;
+double initPathAngle = 0;
 float pathDistance = 0;
-int pathTurningAngle = 0
+double pathTurningTime = 0;
+double pathAngle = 0;
+bool getInitPosition = false;
+bool motorON = false;
 
-float targetLat = 4000;
-float targetLong = 7000;
+//float targetLat = 4347.0390;
+//float targetLong = 7907.7822;
 
-PID myPID(&pathAngle, &pathTurningAngle, &initPathAngle, 2, 2, 2, DIRECT);
+float targetLat = 0;
+float targetLong = 0;
+
+PID myPID(&pathAngle, &pathTurningTime, &initPathAngle, 2, 2, 2, DIRECT);
 
 
-enumStates codeState = obstacleManeuver;
+controllerStates codeState =latSetting;
 
 int pos = SERVO_INIT;
 
@@ -120,6 +128,15 @@ char c;       //Used to read the characters spewing from the GPS module
 int desiredLat = 0;
 int desiredLon = 0;
 
+/*
+ * COMM Declarations
+ */
+
+int tx=1;
+int rx=0;
+char inSerial[15];
+boolean falseNumber = false;
+
 void setup() {
   servoRoll.attach(rollPin);
   
@@ -136,6 +153,8 @@ void setup() {
   pinMode(echoPinL, INPUT);
   pinMode(trigPinR, OUTPUT);
   pinMode(echoPinR, INPUT);
+  pinMode(tx, OUTPUT);
+  pinMode(rx, INPUT);  
 
   frontMotor->setSpeed(INIT_FRONT_SPEED);
   backMotor->setSpeed(INIT_BACK_SPEED);
@@ -157,7 +176,9 @@ void setup() {
   maneuverFlag = false;
 
 
-
+  // turn the PID on
+  myPID.SetMode(AUTOMATIC);
+  myPID.SetOutputLimits(-5000, 5000);
 }
 
 /*
@@ -165,13 +186,64 @@ void setup() {
 */
 
 void loop() { 
-  nsigned long currentMillis = millis();
-  getInitPathAngle();
+  unsigned long currentMillis = millis();
+  unsigned long prevMillis;
+
+//  Serial.println(codeState);
+
+  if (codeState == latSetting || codeState == longSetting) {
+    int i=0;
+    int m=0;
+    delay(500);                                         
+    if (Serial.available() > 0) {             
+      while (Serial.available() > 0) {
+        inSerial[i]=Serial.read(); 
+        i++;      
+      }
+      inSerial[i]='\0';
+      Check_Protocol(inSerial);
+    }
+  }
 
   if (codeState == directionFinding) {
-    if (currentMillis % 5000 == 0) {
-      getPathAngle();
-      myPID.Compute();
+    if (GPS.fix) {
+      if (!getInitPosition) {
+        getInitPathAngle();
+        getInitPosition = true;
+      }
+
+      if ((currentMillis - prevMillis) > pathTurningTime && motorON) {
+        frontMotor->run(RELEASE);
+        motorON = false;
+      }
+      if (currentMillis % 5000 == 0 && pathDistance > 100) {
+        getPathAngle();
+        getPathDistance();
+        myPID.Compute();
+        Serial.println("");
+        Serial.print("path angle is: ");
+        Serial.println(pathAngle);
+        Serial.print("path turning time is: ");
+        Serial.println(pathTurningTime);
+
+        if (pathAngle > 0) {
+          frontMotor->run(FORWARD);
+        }
+        else {
+          frontMotor->run(BACKWARD);
+          pathAngle = pathAngle*-1;
+        }
+
+        if (pathAngle < 250) {
+          pathAngle = 250;
+        }
+        motorON = true;
+        prevMillis = millis();
+      }
+    }
+    else {
+      readGPS();
+      Serial.println("waiting for gps");
     }
   }
 
@@ -206,6 +278,52 @@ void loop() {
 //    maneuverCode();
 //  }
 }
+
+/*
+ * COMMUNICATION CODE
+ */
+
+ void Check_Protocol(char inStr[]){   
+  int i=0;
+  int m=0;
+  int count = 0;
+  Serial.println(inStr);
+
+  while (inStr[m] != NULL) {
+    if (isDigit(inStr[m]) || inStr[m] == '.') {
+      Serial.println("real number");
+    count++;
+    }
+    else {
+      Serial.println("fake number");
+      falseNumber = true;
+    }
+    m++;
+  }
+  
+  if (!falseNumber && count == 9 && codeState == longSetting) {
+    codeState = directionFinding;
+    targetLong = 0;
+    targetLong = atof(inStr);
+    Serial.println("targetlong");
+    Serial.println(targetLong,4);
+  }
+  if (!falseNumber && count == 9 && codeState == latSetting) {
+    codeState = longSetting;
+    targetLat = 0;
+    targetLat = atof(inStr);
+    Serial.println("targetlat");
+    Serial.println(targetLat,4);
+  }
+  
+  for(m=0;m<15;m++){
+    inStr[m]=0;
+  }
+  i=0;
+
+}
+
+
 /*
  * DIRECTION CODE
  */
@@ -215,7 +333,7 @@ void getInitPathAngle() {
   initLat = GPS.latitude;
   initLong = GPS.longitude;
 
-  initPathAngle = atan2((targetLat-initLat),(targetLong-initLong));
+  initPathAngle = atan2((targetLat-initLat),(targetLong-initLong))* 180 / PI;
 }
 
 void getPathAngle() {
@@ -223,7 +341,7 @@ void getPathAngle() {
   currLat = GPS.latitude;
   currLong = GPS.longitude;
 
-  pathAngle = atan2((targetLat-currLat),(targetLong-currLong));
+  pathAngle = atan2((targetLat-currLat),(targetLong-currLong))* 180 / PI;
 }
 
 void getPathDistance() {
